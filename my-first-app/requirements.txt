@@ -1,3 +1,0 @@
-# viktor==13.6.2
-plotly
-numpy
