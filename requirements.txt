@@ -1,3 +1,6 @@
 # viktor==13.6.2
 plotly
 geopy
+pandas
+openpyxl
+haversine

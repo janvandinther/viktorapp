@@ -1,13 +1,17 @@
 from viktor import ViktorController
 from viktor.parametrization import ViktorParametrization, Field, OptionField, MultiSelectField, Lookup, FunctionLookup, SetParamsButton, OutputField, Text, IntegerField, LineBreak
 from viktor.result import ViktorResult, SetParamsResult
-from viktor.views import GeoJSONResult, GeoJSONView, Color, PlotlyView, PlotlyResult
+from viktor.views import GeoJSONResult, GeoJSONView, Color, PlotlyView, PlotlyResult, MapView, MapResult, MapPoint
 from viktor.geometry import Arc
+from viktor import Color
 
 from geopy import distance
 import plotly.graph_objects as go
 import random
 import numpy as np
+import pandas as pd
+import haversine as hs
+from haversine import Unit
 
 profiles = {}
 for i in range(1,11):
@@ -16,6 +20,10 @@ for i in range(1,11):
     for x in range(24):
         profiles[i].append(random.random())
 
+meters_df = pd.read_excel("METERS CZL.xlsx")
+transformers_df = pd.read_excel("CZL TXF NEW.xlsx")
+
+geojson2 = {'type': 'FeatureCollection', 'features':[]}
 
 geojson = {'type': 'FeatureCollection',
  'features': [{'type': 'Feature',
@@ -246,6 +254,7 @@ geojson = {'type': 'FeatureCollection',
     'type': 'Point'}}]}
 
 meters = ['Meter 1', 'Meter 2', 'Meter 3', 'Meter 4', 'Meter 5', 'Meter 6', 'Meter 7']
+meters2 = list(meters_df['OBJECTID'].unique())
 
 for i in geojson['features']:
   if i['properties']['identifier'] == "Transformer 1":
@@ -262,26 +271,23 @@ def get_distances_meters(params, **kwargs):
         for i in geojson['features']:
           if i['properties']['identifier'] == m:
             meter_location = tuple(i['geometry']['coordinates'])
-            meter_distance = round(distance.distance(transformer_location, meter_location).kilometers*1000)            
+            meter_distance = round(distance.distance(transformer_location, meter_location).kilometers*1000)        
             output_text = output_text + "\n Distance between Transformer {} and {}: {} meters".format(params.option, m, meter_distance)
   return output_text
 
 class Parametrization(ViktorParametrization):
     option = OptionField('Select a transformer', options=['1','2','3','4','5','6'], default='1')
+    option2 = IntegerField('Select transformer')
     range_distance = IntegerField('Distance to transformer [m]')
     set_params_btn = SetParamsButton("Connect meters", "set_param_a", longpoll=True)
     connected_meters = MultiSelectField('Connected meters', options = meters, default = [])
     
     pass
-
-
-
-        
-
+   
 class Controller(ViktorController):
+  
     label = 'My Entity Type'
     parametrization = Parametrization
-    global geojson
     
     def set_param_a(self, params, **kwargs):
       for i in geojson['features']:
@@ -301,7 +307,7 @@ class Controller(ViktorController):
               connected_meters.append(m)
               
       dataParam = {"connected_meters" : connected_meters}
-      print(geojson)
+      #print(geojson)
       return SetParamsResult(dataParam)
     
     @GeoJSONView('Map', duration_guess=1)
@@ -326,26 +332,78 @@ class Controller(ViktorController):
               for x in geojson['features']:
                 if x['properties']['identifier'] == m:
                   x['properties']['marker-color'] = "#FFA500"
-                  
-        
-      
-        # geojson['features'].append(
-        #   {
-        #     'type': "Feature",
-        #     'properties':{
-        #       'subType':"Circle",
-        #       'radius':5
-        #      },   
-        #     'geometry': {
-        #       'type':"Point",
-        #       'coordinates': coordinates
-        #     }
-        #   }
-        #   )
+
         
         return GeoJSONResult(geojson)
-    
-    
+                  
+    @GeoJSONView('New Map', duration_guess=30)
+    def get_meter_map(self, params, **kwargs):     
+      
+      for i,x in transformers_df.iterrows():
+        lon = x['X_field']
+        lat = x['Y_Field']
+        id = x['OBJECTID']
+        
+        new_transformer = { 'type': 'Feature',
+                            'properties': {
+                              'identifier': str(id),
+                              'description': "TRANSFORMER " + str(id),
+                              'icon': 'square-filled',
+                              'marker-color': '#555555',
+                              'marker-size' : 'small'
+                              },
+                            'geometry': {
+                              'coordinates': [lon, lat],
+                              'type': 'Point'
+                              }
+                            }
+        
+        geojson2['features'].append(new_transformer)
+      
+      for i,x in meters_df.iterrows():
+        
+        lon = x['longitude']
+        lat = x['latitude']
+        id = x['OBJECTID']
+        
+        new_meter = { 'type': 'Feature',
+                      'properties': {
+                        'identifier': str(id),
+                        'description': "METER " + str(id), 
+                        'icon': 'circle-filled',
+                        'marker-color': '#FFA500',
+                        'marker-size' : 'small'
+                        },
+                      'geometry': {
+                        'coordinates': [lon, lat],
+                        'type': 'Point'}
+                      }
+        
+        geojson2['features'].append(new_meter)
+      
+      for i in geojson2['features']:
+        print("TRY")
+        if i['properties']['identifier'] == str(params.option2):
+          transformer_location = tuple(i['geometry']['coordinates'])
+          print(transformer_location)
+        else:
+          print('JAMMER JOH')
+
+      connected_meters = []
+
+      for m in meters2:
+        for i in geojson2['features']:
+          if i['properties']['identifier'] == str(m):
+            meter_location = tuple(i['geometry']['coordinates'])
+            meter_distance = round(hs.haversine(transformer_location, meter_location,unit=Unit.METERS))
+            
+            if meter_distance < params.range_distance:
+              connected_meters.append(m)
+              i['properties']['marker-color'] = '#F4190B'
+      
+      #print(geojson2)
+      return GeoJSONResult(geojson2)
+                    
     
     @PlotlyView("Transformer Loading", duration_guess=1)
     def get_plotly_view(self, params, **kwargs):
