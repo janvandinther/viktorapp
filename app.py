@@ -343,11 +343,13 @@ class Controller(ViktorController):
         lon = x['X_field']
         lat = x['Y_Field']
         id = x['OBJECTID']
+        feeder_id = x['Feeder ID']
         
         new_transformer = { 'type': 'Feature',
                             'properties': {
                               'identifier': str(id),
                               'description': "TRANSFORMER " + str(id),
+                              'feeder-id' : feeder_id,
                               'icon': 'square-filled',
                               'marker-color': '#555555',
                               'marker-size' : 'small'
@@ -365,11 +367,13 @@ class Controller(ViktorController):
         lon = x['longitude']
         lat = x['latitude']
         id = x['OBJECTID']
+        feeder_id = x['Feeder ID']
         
         new_meter = { 'type': 'Feature',
                       'properties': {
                         'identifier': str(id),
-                        'description': "METER " + str(id), 
+                        'description': "METER " + str(id),
+                        'feeder-id' : feeder_id, 
                         'icon': 'circle-filled',
                         'marker-color': '#FFA500',
                         'marker-size' : 'small'
@@ -382,18 +386,14 @@ class Controller(ViktorController):
         geojson2['features'].append(new_meter)
       
       for i in geojson2['features']:
-        print("TRY")
         if i['properties']['identifier'] == str(params.option2):
           transformer_location = tuple(i['geometry']['coordinates'])
-          print(transformer_location)
-        else:
-          print('JAMMER JOH')
-
+          feeder_id_tr = i['properties']['feeder-id']
       connected_meters = []
 
       for m in meters2:
         for i in geojson2['features']:
-          if i['properties']['identifier'] == str(m):
+          if i['properties']['feeder-id'] == feeder_id_tr and i['properties']['identifier'] == str(m):
             meter_location = tuple(i['geometry']['coordinates'])
             meter_distance = round(hs.haversine(transformer_location, meter_location,unit=Unit.METERS))
             
